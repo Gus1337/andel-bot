@@ -30,6 +30,7 @@ id -u botuser &>/dev/null || useradd -m -s /bin/bash botuser
 
 VNC_PASS=$(openssl rand -base64 12)
 mkdir -p /home/botuser/.vnc
+chown -R botuser:botuser /home/botuser/.vnc
 su - botuser -c "x11vnc -storepasswd '$VNC_PASS' /home/botuser/.vnc/passwd"
 
 su - botuser -c "xvfb-run -a firefox-esr -CreateProfile 'andelsbot /home/botuser/.mozilla/firefox/andelsbot-profile'"
