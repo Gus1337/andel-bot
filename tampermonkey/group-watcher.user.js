@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.2
+// @version      0.3
 // @description  Pilot: extract new posts from one Facebook group feed, log to console only (no backend yet)
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -39,6 +39,17 @@
     });
   }
 
+  function extractPostText(article) {
+    // Facebook Comet UI marks the post body with this attribute.
+    // Using it avoids pulling in author name, timestamp, comments, and action buttons.
+    const msgEl = article.querySelector('[data-ad-comet-preview="message"]');
+    if (msgEl && msgEl.innerText.trim()) return msgEl.innerText.trim();
+    // Fallback for older page variants
+    const legacy = article.querySelector('[data-testid="post_message"]');
+    if (legacy && legacy.innerText.trim()) return legacy.innerText.trim();
+    return '';
+  }
+
   function extractPermalink(article) {
     const links = article.querySelectorAll('a[href]');
     for (const a of links) {
@@ -68,8 +79,8 @@
 
       articles.forEach((article) => {
         const permalink = extractPermalink(article);
-        const text = (article.innerText || '').trim();
-        if (!text) return;
+        const text = extractPostText(article);
+        if (!text && !permalink) return;
 
         const key = permalink || text.slice(0, 300);
         if (seen.has(key)) return;
