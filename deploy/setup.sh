@@ -16,6 +16,13 @@ fi
 apt-get update
 apt-get install -y xvfb x11vnc novnc websockify dbus-x11 bzip2 --no-install-recommends
 
+# Firefox's runtime GTK/graphics libs -- package names vary by Ubuntu
+# release (the t64 suffix from the 64-bit time_t transition), so try
+# both and ignore whichever doesn't exist on this release.
+for pkg in libgtk-3-0 libgtk-3-0t64 libdbus-glib-1-2 libxt6 libxt6t64 libx11-xcb1 libasound2 libasound2t64 libpci3 libegl1 libgbm1 fonts-liberation; do
+  apt-get install -y --no-install-recommends "$pkg" 2>/dev/null || true
+done
+
 # Real Firefox from Mozilla directly (avoids Ubuntu's Snap-only packaging,
 # which causes sandboxing issues in headless/service setups)
 if [ ! -d /opt/firefox ]; then
