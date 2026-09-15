@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.3
+// @version      0.4
 // @description  Pilot: extract new posts from one Facebook group feed, log to console only (no backend yet)
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -39,14 +39,33 @@
     });
   }
 
-  function extractPostText(article) {
-    // Facebook Comet UI marks the post body with this attribute.
-    // Using it avoids pulling in author name, timestamp, comments, and action buttons.
-    const msgEl = article.querySelector('[data-ad-comet-preview="message"]');
-    if (msgEl && msgEl.innerText.trim()) return msgEl.innerText.trim();
-    // Fallback for older page variants
-    const legacy = article.querySelector('[data-testid="post_message"]');
-    if (legacy && legacy.innerText.trim()) return legacy.innerText.trim();
+  function extractPostText(article, debug) {
+    const selectors = [
+      '[data-ad-comet-preview="message"]',
+      '[data-testid="post_message"]',
+      '[data-ad-preview="message"]',
+    ];
+    for (const sel of selectors) {
+      const el = article.querySelector(sel);
+      if (el && el.innerText.trim()) {
+        if (debug) console.log('[andelsbolig-bot] text via selector:', sel);
+        return el.innerText.trim();
+      }
+    }
+
+    // Fallback: first div[dir="auto"] that isn't inside a nested article (comment)
+    // and has meaningful length
+    const dirAutos = Array.from(article.querySelectorAll('div[dir="auto"]'))
+      .filter(el => !el.parentElement.closest('div[role="article"]'));
+    const best = dirAutos.find(el => el.innerText.trim().length > 10);
+    if (best) {
+      if (debug) console.log('[andelsbolig-bot] text via dir=auto fallback');
+      return best.innerText.trim();
+    }
+
+    // Nothing found — dump a diagnostic snippet so we can find the right selector
+    console.warn('[andelsbolig-bot] extractPostText: no text found. Article HTML sample:',
+      article.innerHTML.slice(0, 800));
     return '';
   }
 
@@ -79,7 +98,7 @@
 
       articles.forEach((article) => {
         const permalink = extractPermalink(article);
-        const text = extractPostText(article);
+        const text = extractPostText(article, true);
         if (!text && !permalink) return;
 
         const key = permalink || text.slice(0, 300);
