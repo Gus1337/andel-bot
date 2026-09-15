@@ -75,42 +75,14 @@ def handle_post(payload: dict, con: sqlite3.Connection) -> tuple[int, str]:
     mark_seen(con, permalink)
     log.info("NEW  %s  text_len=%d", permalink, len(text))
 
-    # No text extracted — send a bare link so nothing is silently lost
-    if not text:
-        log.info("  → no text, sending bare link alert")
-        try:
-            send_message(
-                f'⚠️ <b>Nyt opslag (ingen tekst)</b>\n'
-                f'<a href="{permalink}">Åbn opslag</a>',
-                parse_mode="HTML",
-                disable_preview=False,
-            )
-        except Exception as exc:
-            log.error("  telegram error: %s", exc)
-        return 200, "bare alert sent"
-
-    # Filter
-    passes, reason = passes_filter(text)
-    log.info("  filter: %s — %s", "PASS" if passes else "DROP", reason)
-    if not passes:
-        return 200, f"filtered: {reason}"
-
-    # Classify
-    try:
-        is_listing, cls_reason = classify_post(text)
-    except Exception as exc:
-        log.error("  classify error: %s", exc)
-        return 200, f"classify error: {exc}"
-
-    log.info("  classify: %s — %s", "JA" if is_listing else "NEJ", cls_reason)
-    if not is_listing:
-        return 200, f"not a listing: {cls_reason}"
+    # TEMP: filter and classify are bypassed until text extraction is reliable.
+    # Every new post triggers a Telegram alert with whatever text we have.
 
     # Notify
     alert = format_alert(
         group_name="Andelsbolig-gruppe",
         group_url=group_url,
-        post_text=text,
+        post_text=text if text else "(ingen tekst udtrukket)",
         post_url=permalink,
     )
     try:

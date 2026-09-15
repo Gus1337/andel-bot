@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.12
+// @version      0.13
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -156,10 +156,18 @@
     }, 1500);
   }
 
-  window.addEventListener('load', () => setTimeout(scanFeed, 3000));
+  window.addEventListener('load', () => {
+    // Ensure we're on chronological sort before scanning.
+    // If not, redirect now — the resulting load event will scan correctly.
+    if (!location.href.includes('sorting_setting=CHRONOLOGICAL')) {
+      const base = location.href.split('?')[0];
+      location.href = base + '?sorting_setting=CHRONOLOGICAL';
+      return;
+    }
+    setTimeout(scanFeed, 3000);
+  });
 
-  // Re-navigate on a chronological sort so newest posts surface first,
-  // rather than a plain reload (which would keep Facebook's relevance sort).
+  // Periodic re-navigation to keep the chronological sort and pick up new posts.
   setInterval(() => {
     const base = location.href.split('?')[0];
     location.href = base + '?sorting_setting=CHRONOLOGICAL';
