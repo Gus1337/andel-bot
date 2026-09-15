@@ -1,0 +1,53 @@
+{
+  "groups": [
+    {
+      "url": "https://www.facebook.com/groups/3528177187299944",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/2013736325520631",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/3394353834186821",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/361167201884171",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/andelsbolig.til.salg",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/2575420936155294",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/andelsbolig.koebenhavn",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/6051852544876491",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/386485001399717",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/885823616059794",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/309992781313424",
+      "name": null
+    },
+    {
+      "url": "https://www.facebook.com/groups/951014219665593",
+      "name": null
+    }
+  ],
+  "notes": "Parsed from fb-lister.md. 'name' fields to be filled in once each group's display name is confirmed."
+}
