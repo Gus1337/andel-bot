@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.1
+// @version      0.2
 // @description  Pilot: extract new posts from one Facebook group feed, log to console only (no backend yet)
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -57,7 +57,13 @@
     // Give expanded "see more" text a moment to render before reading it
     setTimeout(() => {
       const seen = loadSeen();
-      const articles = document.querySelectorAll('div[role="article"]');
+      const allArticles = document.querySelectorAll('div[role="article"]');
+      // Comments carry the same role="article" attribute as top-level posts,
+      // but live nested inside their parent post's subtree -- only keep
+      // articles that are NOT nested inside another article.
+      const articles = Array.from(allArticles).filter((el) => {
+        return el.parentElement && !el.parentElement.closest('div[role="article"]');
+      });
       let newCount = 0;
 
       articles.forEach((article) => {
@@ -78,7 +84,7 @@
       });
 
       saveSeen(seen);
-      console.log(`[andelsbolig-bot] scan complete: ${articles.length} article-elements on page, ${newCount} new`);
+      console.log(`[andelsbolig-bot] scan complete: ${allArticles.length} total article-elements (${articles.length} top-level posts) on page, ${newCount} new`);
     }, 1500);
   }
 
