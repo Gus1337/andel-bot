@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.7
-// @description  Pilot: extract new posts from one Facebook group feed, log to console only (no backend yet)
+// @version      0.12
+// @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @connect      127.0.0.1
 // ==/UserScript==
 
 (function () {
@@ -56,49 +58,47 @@
       }
     }
 
-    // Fallback: div[dir="auto"] elements that are NOT inside a nested article
-    // (comments use nested role="article"). We walk up from each candidate to
-    // the top-level article; if we pass through another role="article" node it's
-    // inside a comment and gets excluded.
-    const nestedArticles = new Set(article.querySelectorAll('div[role="article"]'));
-    const dirAutos = Array.from(article.querySelectorAll('div[dir="auto"]')).filter(el => {
-      let node = el.parentElement;
-      while (node && node !== article) {
-        if (nestedArticles.has(node)) return false;
-        node = node.parentElement;
-      }
-      return true;
-    });
-
-    // DEBUG v0.7: log every candidate so we can see what's competing
-    if (debug) {
-      dirAutos.forEach((el, i) => {
-        const roles = [];
-        let node = el.parentElement;
-        while (node && node !== article) {
-          const r = node.getAttribute('role');
-          const al = node.getAttribute('aria-label');
-          if (r) roles.push(`role=${r}`);
-          if (al) roles.push(`aria-label="${al.slice(0,30)}"`);
-          node = node.parentElement;
+    // Shared posts (e.g. Marketplace listings shared into the group) put the
+    // post body in a <blockquote> that sits OUTSIDE the role="article" element
+    // as a sibling in the same parent wrapper. Check both inside and in siblings.
+    const bq = article.querySelector('blockquote') || (() => {
+      const parent = article.parentElement;
+      if (!parent) return null;
+      for (const sib of parent.children) {
+        if (sib !== article) {
+          const found = sib.tagName === 'BLOCKQUOTE' ? sib : sib.querySelector('blockquote');
+          if (found) return found;
         }
-        console.log(`[andelsbolig-bot] dir=auto[${i}] depth=${roles.length} text="${el.innerText.trim().slice(0,80)}" parents=[${roles.slice(0,5).join(', ')}]`);
-      });
+      }
+      return null;
+    })();
+
+    if (bq) {
+      // Collect all [dir="auto"] innerTexts, deduplicate, pick longest (parent
+      // elements repeat their children's text — the longest is the full body).
+      const texts = [...new Set(
+        Array.from(bq.querySelectorAll('[dir="auto"]'))
+          .map(el => el.innerText.trim())
+          .filter(t => t.length > 5)
+      )].sort((a, b) => b.length - a.length);
+      if (texts.length > 0 && texts[0].length > 10) {
+        if (debug) console.log('[andelsbolig-bot] text via blockquote');
+        return texts[0];
+      }
     }
 
-    // Pick the FIRST in DOM order with meaningful length — post body always
-    // appears above comments in the article, so first beats longest.
-    const best = dirAutos
-      .map(el => ({ el, text: el.innerText.trim() }))
-      .find(({ text }) => text.length > 10);
-
-    if (best) {
-      if (debug) console.log('[andelsbolig-bot] text via dir=auto fallback');
-      return best.text;
+    // Regular posts: longest [dir="auto"] anywhere in the article
+    const candidates = Array.from(article.querySelectorAll('[dir="auto"]'))
+      .map(el => el.innerText.trim())
+      .filter(t => t.length > 10)
+      .sort((a, b) => b.length - a.length);
+    if (debug) console.log(`[andelsbolig-bot] dir=auto candidates: ${candidates.length}, longest: ${candidates[0]?.length ?? 0} chars`);
+    if (candidates.length > 0) {
+      if (debug) console.log('[andelsbolig-bot] text via longest dir=auto');
+      return candidates[0];
     }
 
-    console.warn('[andelsbolig-bot] extractPostText: no text found. Article HTML sample:',
-      article.innerHTML.slice(0, 800));
+    console.warn('[andelsbolig-bot] extractPostText: no text found');
     return '';
   }
 
@@ -140,10 +140,14 @@
         seen.add(key);
         newCount++;
 
-        console.log('[andelsbolig-bot] NEW POST', {
-          group: location.href,
-          permalink,
-          textPreview: text.slice(0, 300),
+        console.log('[andelsbolig-bot] NEW POST', { permalink, textPreview: text.slice(0, 120) });
+        GM_xmlhttpRequest({
+          method: 'POST',
+          url: 'http://127.0.0.1:5000/post',
+          headers: { 'Content-Type': 'application/json' },
+          data: JSON.stringify({ permalink, text, group_url: location.href }),
+          onload: (r) => console.log('[andelsbolig-bot] bridge →', r.status, r.responseText),
+          onerror: (e) => console.warn('[andelsbolig-bot] bridge error', e),
         });
       });
 

@@ -1,0 +1,15 @@
+[Unit]
+Description=Andelsbolig-bot bridge (filter/classify/notify)
+After=network.target
+
+[Service]
+User=botuser
+WorkingDirectory=/home/botuser/andelsbolig-bot
+ExecStart=/usr/bin/python3 /home/botuser/andelsbolig-bot/src/bridge.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
