@@ -108,6 +108,21 @@ EOF
 systemctl daemon-reload
 systemctl enable --now xvfb.service andelsbot-firefox.service x11vnc.service novnc.service
 
+# Bridge (filter/classify/notify HTTP receiver for the Tampermonkey script).
+# Only install/start it once the repo is actually deployed to botuser's
+# home -- ExecStart would otherwise fail and loop-restart forever. Re-run
+# this script after deploying the code to pick it up.
+REPO_DIR=/home/botuser/andelsbolig-bot
+if [ -f "$REPO_DIR/src/bridge.py" ]; then
+  cp "$REPO_DIR/deploy/andelsbot-bridge.service" /etc/systemd/system/andelsbot-bridge.service
+  chown -R botuser:botuser "$REPO_DIR"
+  systemctl daemon-reload
+  systemctl enable --now andelsbot-bridge.service
+else
+  echo "NOTE: $REPO_DIR not found yet -- skipping andelsbot-bridge.service install."
+  echo "      Deploy the repo there, then re-run this script (it's idempotent)."
+fi
+
 ufw allow OpenSSH
 ufw allow 6080/tcp
 ufw --force enable

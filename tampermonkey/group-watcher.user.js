@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.13
+// @version      0.14
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -120,6 +120,10 @@
     // Give expanded "see more" text a moment to render before reading it
     setTimeout(() => {
       const seen = loadSeen();
+      // Keys dispatched during THIS scan pass, to avoid double-POSTing the
+      // same post twice before the bridge has confirmed either one -- kept
+      // separate from `seen`, which is only updated on confirmed delivery.
+      const inFlight = new Set();
       const allArticles = document.querySelectorAll('div[role="article"]');
       // Comments carry the same role="article" attribute as top-level posts,
       // but live nested inside their parent post's subtree -- only keep
@@ -136,8 +140,8 @@
         if (!text && !permalink) return;
 
         const key = permalink || text.slice(0, 300);
-        if (seen.has(key)) return;
-        seen.add(key);
+        if (seen.has(key) || inFlight.has(key)) return;
+        inFlight.add(key);
         newCount++;
 
         console.log('[andelsbolig-bot] NEW POST', { permalink, textPreview: text.slice(0, 120) });
@@ -146,12 +150,27 @@
           url: 'http://127.0.0.1:5000/post',
           headers: { 'Content-Type': 'application/json' },
           data: JSON.stringify({ permalink, text, group_url: location.href }),
-          onload: (r) => console.log('[andelsbolig-bot] bridge →', r.status, r.responseText),
-          onerror: (e) => console.warn('[andelsbolig-bot] bridge error', e),
+          onload: (r) => {
+            console.log('[andelsbolig-bot] bridge →', r.status, r.responseText);
+            // Only remember this post once the bridge has actually confirmed
+            // it (alerted, or already-seen server-side). If the bridge is
+            // down or errors, do NOT mark it seen -- leaving it out means
+            // the next scan will find and retry it, instead of the post
+            // being silently and permanently dropped.
+            if (r.status >= 200 && r.status < 300) {
+              const current = loadSeen();
+              current.add(key);
+              saveSeen(current);
+            } else {
+              console.warn('[andelsbolig-bot] bridge rejected post, will retry next scan:', key);
+            }
+          },
+          onerror: (e) => {
+            console.warn('[andelsbolig-bot] bridge unreachable, will retry next scan:', key, e);
+          },
         });
       });
 
-      saveSeen(seen);
       console.log(`[andelsbolig-bot] scan complete: ${allArticles.length} total article-elements (${articles.length} top-level posts) on page, ${newCount} new`);
     }, 1500);
   }
