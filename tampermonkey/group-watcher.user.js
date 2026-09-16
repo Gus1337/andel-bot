@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.20
+// @version      0.21
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -15,9 +15,14 @@
 (function () {
   'use strict';
 
-  // Pilot phase: conservative interval. Tighten later once we've validated
-  // the extraction and seen how the account holds up.
-  const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+  // Test set: cycle through these three groups from a single tab, one at a
+  // time, instead of needing one tab open per group.
+  const GROUP_URLS = [
+    'https://www.facebook.com/groups/2013736325520631/',
+    'https://www.facebook.com/groups/3528177187299944/',
+    'https://www.facebook.com/groups/885823616059794/',
+  ];
+  const CYCLE_INTERVAL_MS = 60 * 1000; // 1 minute per group, for this test run
   const MAX_SEEN = 500; // cap stored history so it doesn't grow forever
 
   // Posts are assumed not to appear overnight, and running fewer hours/day
@@ -29,6 +34,19 @@
   function withinRunWindow() {
     const hour = new Date().getHours();
     return hour >= RUN_WINDOW_START_HOUR && hour < RUN_WINDOW_END_HOUR;
+  }
+
+  // Cycling state (which group we're on) is persisted via GM storage --
+  // each navigation is a fresh page load/script execution, so this can't
+  // just live in a variable.
+  function currentGroupIndex() {
+    const base = location.href.split('?')[0].replace(/\/$/, '') + '/';
+    return GROUP_URLS.findIndex((u) => u.replace(/\/$/, '') + '/' === base);
+  }
+
+  function navigateToGroup(index) {
+    GM_setValue('cycle_index', index);
+    location.href = GROUP_URLS[index] + '?sorting_setting=CHRONOLOGICAL';
   }
 
   function loadSeen() {
@@ -182,8 +200,11 @@
     // Give expanded "see more" text a moment to render before reading it.
     // Measured via DevTools Network tab on a real group page: full load
     // (including the discussion-feed GraphQL response) can take upwards of
-    // 30s, well past the old 10s cap -- 45 attempts gives real headroom.
-    // Cheap to be generous here since this only runs once per 15-min cycle.
+    // 30s. Worth knowing: at a 1-minute cycle interval, a scan that needs
+    // the full 45s+3s here leaves very little buffer before the next
+    // group swap cuts it off -- fine for this test run, but tighten this
+    // cap back down (or lengthen CYCLE_INTERVAL_MS) once back to a normal
+    // polling cadence.
     waitForArticlesReady(45, 1000, () => {
       const seen = loadSeen();
       // Keys dispatched during THIS scan pass, to avoid double-POSTing the
@@ -246,6 +267,15 @@
       console.log('[andelsbolig-bot] outside run window (07:00-23:00), skipping scan');
       return;
     }
+
+    const idx = currentGroupIndex();
+    if (idx === -1) {
+      // Not on one of the target groups (first load, or Facebook stripped
+      // our query param) -- jump to wherever we left off, or the start.
+      navigateToGroup(GM_getValue('cycle_index', 0));
+      return;
+    }
+
     // Ensure we're on chronological sort before scanning.
     // If not, redirect now — the resulting load event will scan correctly.
     if (!location.href.includes('sorting_setting=CHRONOLOGICAL')) {
@@ -253,18 +283,21 @@
       location.href = base + '?sorting_setting=CHRONOLOGICAL';
       return;
     }
+
+    GM_setValue('cycle_index', idx); // keep persisted index in sync with reality
     setTimeout(scanFeed, 3000);
   });
 
-  // Periodic re-navigation to keep the chronological sort and pick up new
-  // posts. Outside the run window this just skips the tick -- the next tick
-  // after 07:00 will pick back up without any extra wiring needed.
+  // Every minute, move on to the next group in the list (wrapping around).
+  // Outside the run window this just skips the tick -- the next tick after
+  // 07:00 will pick back up without any extra wiring needed.
   setInterval(() => {
     if (!withinRunWindow()) {
-      console.log('[andelsbolig-bot] outside run window (07:00-23:00), skipping refresh');
+      console.log('[andelsbolig-bot] outside run window (07:00-23:00), skipping cycle');
       return;
     }
-    const base = location.href.split('?')[0];
-    location.href = base + '?sorting_setting=CHRONOLOGICAL';
-  }, REFRESH_INTERVAL_MS);
+    const idx = currentGroupIndex();
+    const nextIndex = (idx === -1 ? 0 : (idx + 1) % GROUP_URLS.length);
+    navigateToGroup(nextIndex);
+  }, CYCLE_INTERVAL_MS);
 })();
