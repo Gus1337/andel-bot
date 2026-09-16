@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.14
+// @version      0.15
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -15,8 +15,19 @@
 
   // Pilot phase: conservative interval. Tighten later once we've validated
   // the extraction and seen how the account holds up.
-  const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 2 minutes
+  const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
   const MAX_SEEN = 500; // cap stored history so it doesn't grow forever
+
+  // Posts are assumed not to appear overnight, and running fewer hours/day
+  // reduces the "always-on" bot signature. Relies on the VM's system
+  // timezone being Europe/Copenhagen (set in deploy/setup.sh).
+  const RUN_WINDOW_START_HOUR = 7;  // inclusive, 07:00
+  const RUN_WINDOW_END_HOUR = 23;   // exclusive, up to 23:00
+
+  function withinRunWindow() {
+    const hour = new Date().getHours();
+    return hour >= RUN_WINDOW_START_HOUR && hour < RUN_WINDOW_END_HOUR;
+  }
 
   function loadSeen() {
     try {
@@ -176,6 +187,10 @@
   }
 
   window.addEventListener('load', () => {
+    if (!withinRunWindow()) {
+      console.log('[andelsbolig-bot] outside run window (07:00-23:00), skipping scan');
+      return;
+    }
     // Ensure we're on chronological sort before scanning.
     // If not, redirect now — the resulting load event will scan correctly.
     if (!location.href.includes('sorting_setting=CHRONOLOGICAL')) {
@@ -186,8 +201,14 @@
     setTimeout(scanFeed, 3000);
   });
 
-  // Periodic re-navigation to keep the chronological sort and pick up new posts.
+  // Periodic re-navigation to keep the chronological sort and pick up new
+  // posts. Outside the run window this just skips the tick -- the next tick
+  // after 07:00 will pick back up without any extra wiring needed.
   setInterval(() => {
+    if (!withinRunWindow()) {
+      console.log('[andelsbolig-bot] outside run window (07:00-23:00), skipping refresh');
+      return;
+    }
     const base = location.href.split('?')[0];
     location.href = base + '?sorting_setting=CHRONOLOGICAL';
   }, REFRESH_INTERVAL_MS);
