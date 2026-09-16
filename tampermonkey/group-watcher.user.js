@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.17
+// @version      0.18
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -150,8 +150,12 @@
   function scanFeed() {
     expandSeeMore();
 
-    // Give expanded "see more" text a moment to render before reading it
-    waitForArticlesReady(10, 1000, () => {
+    // Give expanded "see more" text a moment to render before reading it.
+    // Measured via DevTools Network tab on a real group page: full load
+    // (including the discussion-feed GraphQL response) can take upwards of
+    // 30s, well past the old 10s cap -- 45 attempts gives real headroom.
+    // Cheap to be generous here since this only runs once per 15-min cycle.
+    waitForArticlesReady(45, 1000, () => {
       const seen = loadSeen();
       // Keys dispatched during THIS scan pass, to avoid double-POSTing the
       // same post twice before the bridge has confirmed either one -- kept
