@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.19
+// @version      0.20
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -116,12 +116,39 @@
     const links = article.querySelectorAll('a[href]');
     for (const a of links) {
       const href = a.getAttribute('href') || '';
+      // A comment's own timestamp link is usually the post's /posts/ URL
+      // with a comment_id query param tacked on -- matches the same
+      // substrings as a real post permalink, so it has to be excluded
+      // explicitly rather than relying on the /posts/ check alone.
+      if (href.includes('comment_id=')) continue;
       if (href.includes('/posts/') || href.includes('permalink') || href.includes('multi_permalinks')) {
         const clean = href.split('?')[0];
         return clean.startsWith('http') ? clean : 'https://www.facebook.com' + clean;
       }
     }
     return null;
+  }
+
+  // Comments carry the same role="article" attribute as top-level posts
+  // and aren't reliably nested inside their parent post's article element
+  // (confirmed by testing: some render as siblings in a separate comment
+  // list instead) -- so "not nested in another article" alone lets
+  // comments through misclassified as new posts. Facebook labels the
+  // comment list container with an aria-label containing "comment"
+  // (or "kommentar" in Danish) on a role="list" element; walk up from the
+  // article looking for that as a second, independent signal.
+  function looksLikeComment(article) {
+    let el = article.parentElement;
+    let hops = 0;
+    while (el && hops < 25) {
+      const label = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (el.getAttribute('role') === 'list' && (label.includes('comment') || label.includes('kommentar'))) {
+        return true;
+      }
+      el = el.parentElement;
+      hops++;
+    }
+    return false;
   }
 
   // Facebook's feed renders posts as loading placeholders
@@ -164,20 +191,21 @@
       // separate from `seen`, which is only updated on confirmed delivery.
       const inFlight = new Set();
       const allArticles = document.querySelectorAll('div[role="article"]');
-      // Comments carry the same role="article" attribute as top-level posts,
-      // but live nested inside their parent post's subtree -- only keep
-      // articles that are NOT nested inside another article.
       const articles = Array.from(allArticles).filter((el) => {
-        return el.parentElement && !el.parentElement.closest('div[role="article"]');
+        return el.parentElement && !el.parentElement.closest('div[role="article"]') && !looksLikeComment(el);
       });
       let newCount = 0;
 
       articles.forEach((article) => {
         const permalink = extractPermalink(article);
         const text = extractPostText(article, true);
-        if (!text && !permalink) return;
+        // Require a real permalink rather than falling back to a
+        // text-based key -- a genuine post reliably has its own /posts/
+        // link, and this avoids ever alerting on something we can't
+        // actually link back to (and avoids fragile text-slice dedup).
+        if (!permalink) return;
 
-        const key = permalink || text.slice(0, 300);
+        const key = permalink;
         if (seen.has(key) || inFlight.has(key)) return;
         inFlight.add(key);
         newCount++;
