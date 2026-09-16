@@ -108,6 +108,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/debug":
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length)
+            with open(os.path.join(ROOT, "data", "vm_debug_dump.json"), "wb") as f:
+                f.write(raw)
+            log.info("DEBUG dump written  bytes=%d", len(raw))
+            self._json(200, {"result": "saved"})
+            return
         if self.path != "/post":
             self._json(404, {"error": "not found"})
             return
