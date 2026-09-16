@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.15
+// @version      0.16
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -125,11 +125,36 @@
     return null;
   }
 
+  // Facebook's feed renders posts as loading placeholders
+  // ([data-visualcompletion="loading-state"]) before their real content
+  // exists. A fixed delay before scanning is really just a guess at how
+  // long that takes -- it's fine on a warmed-up profile/cache but silently
+  // skips every post on a slow/cold page load (nothing to extract yet).
+  // Poll until no placeholders remain instead of guessing a fixed wait.
+  function waitForArticlesReady(maxAttempts, intervalMs, callback) {
+    let attempts = 0;
+    function check() {
+      attempts++;
+      const stillLoading = document.querySelectorAll(
+        'div[role="article"] [data-visualcompletion="loading-state"]'
+      ).length;
+      if (stillLoading === 0 || attempts >= maxAttempts) {
+        if (stillLoading > 0) {
+          console.log(`[andelsbolig-bot] giving up waiting for ${stillLoading} loading article(s) after ${attempts} attempts`);
+        }
+        callback();
+      } else {
+        setTimeout(check, intervalMs);
+      }
+    }
+    check();
+  }
+
   function scanFeed() {
     expandSeeMore();
 
     // Give expanded "see more" text a moment to render before reading it
-    setTimeout(() => {
+    waitForArticlesReady(10, 1000, () => {
       const seen = loadSeen();
       // Keys dispatched during THIS scan pass, to avoid double-POSTing the
       // same post twice before the bridge has confirmed either one -- kept
@@ -183,7 +208,7 @@
       });
 
       console.log(`[andelsbolig-bot] scan complete: ${allArticles.length} total article-elements (${articles.length} top-level posts) on page, ${newCount} new`);
-    }, 1500);
+    });
   }
 
   window.addEventListener('load', () => {
