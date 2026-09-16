@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.18
+// @version      0.19
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @connect      127.0.0.1
+// @updateURL    https://raw.githubusercontent.com/Gus1337/andel-bot/main/tampermonkey/group-watcher.user.js
+// @downloadURL  https://raw.githubusercontent.com/Gus1337/andel-bot/main/tampermonkey/group-watcher.user.js
 // ==/UserScript==
 
 (function () {
