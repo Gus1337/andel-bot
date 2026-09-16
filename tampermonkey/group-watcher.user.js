@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Andelsbolig Group Watcher (pilot)
 // @namespace    andelsbolig-bot
-// @version      0.16
+// @version      0.17
 // @description  Pilot: extract new posts from one Facebook group feed, POST to local bridge
 // @match        https://www.facebook.com/groups/*
 // @grant        GM_getValue
@@ -53,9 +53,6 @@
   }
 
   function extractPostText(article, debug) {
-    // Skip loading placeholders — article not yet rendered
-    if (article.querySelector('[data-visualcompletion="loading-state"]')) return '';
-
     const selectors = [
       '[data-ad-comet-preview="message"]',
       '[data-testid="post_message"]',
@@ -170,7 +167,6 @@
       let newCount = 0;
 
       articles.forEach((article) => {
-        if (article.querySelector('[data-visualcompletion="loading-state"]')) return;
         const permalink = extractPermalink(article);
         const text = extractPostText(article, true);
         if (!text && !permalink) return;
